@@ -2,7 +2,9 @@ package session
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"geemod/clause"
 	"geemod/dialect"
 	"geemod/log"
 	"geemod/schema"
@@ -17,6 +19,8 @@ type Session struct {
 
 	dialect  dialect.Dialect
 	refTable *schema.Schema
+
+	clause clause.Clause
 }
 
 func New(db *sql.DB, dialect dialect.Dialect) *Session {
@@ -29,6 +33,7 @@ func New(db *sql.DB, dialect dialect.Dialect) *Session {
 
 func (s *Session) Clear() {
 	s.builder.Reset()
+	s.clause = clause.Clause{}
 	s.sqlValues = nil
 }
 func (s *Session) Raw(sql string, values ...any) *Session {
@@ -118,4 +123,62 @@ func (s *Session) HasTable() (bool, error) {
 	tableName := ""
 	row.Scan(&tableName)
 	return tableName == s.refTable.Name, nil
+}
+
+func (s *Session) Insert(values ...any) (int64, error) {
+	var vars []any
+	for _, value := range values {
+		table := s.Model(value).RefTable()
+		s.clause.Set(clause.INSERT, table.Name, table.FieldNames)
+		vars = append(vars, s.refTable.RecordValues(value))
+	}
+	s.clause.Set(clause.VALUES, vars...)
+	sql, vars := s.clause.Build(clause.INSERT, clause.VALUES)
+	result, err := s.Raw(sql, vars...).Exec()
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+func (s *Session) Find(value any) error {
+	//select $fileds from $tableName
+	descSlice := reflect.ValueOf(value)
+	if descSlice.Kind() != reflect.Ptr {
+		return errors.New("not pointer")
+	}
+	descSlice = descSlice.Elem()
+	if descSlice.Kind() != reflect.Slice {
+		return errors.New("not slice")
+	}
+	descType := descSlice.Type().Elem()
+	srcdescType := descType
+	if descType.Kind() == reflect.Ptr {
+		descType = descType.Elem()
+	}
+	schema := s.Model(reflect.New(descType).Elem().Interface()).RefTable()
+
+	s.clause.Set(clause.SELECT, schema.Name, schema.FieldNames)
+
+	sql, vars := s.clause.Build(clause.SELECT)
+	rows, err := s.Raw(sql, vars...).QueryRows()
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		record := reflect.New(descType).Elem()
+		var values []any
+		for _, filed := range schema.FieldNames {
+			values = append(values, record.FieldByName(filed).Addr().Interface())
+		}
+		if err := rows.Scan(values...); err != nil {
+			return err
+		}
+		if srcdescType.Kind() == reflect.Ptr {
+			descSlice.Set(reflect.Append(descSlice, record.Addr()))
+		} else {
+			descSlice.Set(reflect.Append(descSlice, record))
+		}
+	}
+	return rows.Close()
 }

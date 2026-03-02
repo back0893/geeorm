@@ -11,6 +11,13 @@ type generator func(values ...any) (string, []any)
 var generators = map[Type]generator{}
 
 func init() {
+	generators[INSERT] = _insert
+	generators[VALUES] = _values
+	generators[SELECT] = _select
+	generators[LIMIT] = _limit
+	generators[OFFSET] = _offset
+	generators[ORDERBY] = _orderby
+	generators[WHERE] = _where
 }
 
 func _insert(values ...any) (string, []any) {
@@ -29,9 +36,9 @@ func _values(values ...any) (string, []any) {
 	bindStr := ""
 	sqlBuilder.WriteString("values ")
 	for idx, value := range values {
-		vars = value.([]any)
+		tmpVars := value.([]any)
 		if bindStr == "" {
-			bindStr = genBindVars(len(vars))
+			bindStr = genBindVars(len(tmpVars))
 		}
 		sqlBuilder.WriteString("(")
 		sqlBuilder.WriteString(bindStr)
@@ -39,7 +46,7 @@ func _values(values ...any) (string, []any) {
 		if idx+1 < len(values) {
 			sqlBuilder.WriteString(",")
 		}
-		vars = append(vars, vars...)
+		vars = append(vars, tmpVars...)
 	}
 	return sqlBuilder.String(), vars
 }
@@ -61,22 +68,10 @@ func _offset(values ...any) (string, []any) {
 
 func _orderby(values ...any) (string, []any) {
 	//order by $fields $desc
-	sqlBuilder := strings.Builder{}
-	sqlBuilder.WriteString("order by ")
-	for i := 0; i < len(values); i += 2 {
-		sqlBuilder.WriteString(values[i].(string))
-		sqlBuilder.WriteString(values[i+1].(string))
-	}
-	return sqlBuilder.String(), nil
+	return fmt.Sprintf("order by %s", values[0]), nil
 }
 
 func _where(values ...any) (string, []any) {
 	//where $cond
-	sqlBuilder := strings.Builder{}
-	sqlBuilder.WriteString("where ")
-	for i := 0; i < len(values); i += 2 {
-		sqlBuilder.WriteString(values[i].(string))
-		sqlBuilder.WriteString(values[i+1].(string))
-	}
-	return sqlBuilder.String(), nil
+	return fmt.Sprintf("where %s", values[0]), values[1:]
 }

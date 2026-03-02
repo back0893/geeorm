@@ -11,11 +11,11 @@ type Field struct {
 	Type string
 }
 type Schema struct {
-	Model     any
-	Name      string
-	Fields    []*Field
-	FieldName []string
-	FieldsMap map[string]*Field
+	Model      any
+	Name       string
+	Fields     []*Field
+	FieldNames []string
+	FieldsMap  map[string]*Field
 }
 
 func (s *Schema) GetField(name string) *Field {
@@ -43,10 +43,19 @@ func Parse(model any, d dialect.Dialect) *Schema {
 				Type: d.DataTypeOf(reflect.Indirect(rv.Field(i))),
 			}
 			schema.Fields = append(schema.Fields, &filed)
-			schema.FieldName = append(schema.FieldName, p.Name)
+			schema.FieldNames = append(schema.FieldNames, p.Name)
 			schema.FieldsMap[p.Name] = &filed
 		}
 
 	}
 	return &schema
+}
+
+func (s *Schema) RecordValues(dest any) []any {
+	refDest := reflect.Indirect(reflect.ValueOf(dest))
+	var fieldValues []any
+	for i := 0; i < len(s.Fields); i++ {
+		fieldValues = append(fieldValues, refDest.Field(i).Interface())
+	}
+	return fieldValues
 }

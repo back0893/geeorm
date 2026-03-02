@@ -13,7 +13,7 @@ var TestDB *sql.DB
 
 func TestMain(m *testing.M) {
 	var err error
-	TestDB, err = sql.Open("sqlite3", "../gee.db")
+	TestDB, err = sql.Open("sqlite3", "./gee.db")
 	if err != nil {
 		panic(err)
 	}
@@ -56,6 +56,7 @@ func TestSessionQueryRaws(t *testing.T) {
 type User struct {
 	ID   int `geeorm:"Primary Key"`
 	Name string
+	Age  int
 }
 
 func TestSessionCreate(t *testing.T) {
@@ -77,4 +78,48 @@ func TestSessionDrop(t *testing.T) {
 	if has, err := s.HasTable(); err != nil || has {
 		t.Fatal("expect false, but got", has)
 	}
+}
+
+func testRecordInit(t *testing.T) *Session {
+	var (
+		user1 = &User{1, "Tom", 18}
+		user2 = &User{2, "Sam", 25}
+	)
+	t.Helper()
+	s := NewSeesion()
+	s.Model(&User{})
+	err1 := s.DropTable()
+	err2 := s.CreateTable()
+	_, err3 := s.Insert(user1, user2)
+	if err1 != nil || err2 != nil || err3 != nil {
+		t.Fatal("failed init test records")
+	}
+	return s
+}
+
+func TestInsert(t *testing.T) {
+	s := testRecordInit(t)
+	var user3 = &User{3, "Jack", 25}
+	affected, err := s.Insert(user3)
+	if err != nil || affected != 1 {
+		t.Fatal("failed to create record")
+	}
+}
+
+func TestFind(t *testing.T) {
+	s := testRecordInit(t)
+	var users []*User
+	if err := s.Find(&users); err != nil {
+		t.Fatalf("failed to find records %v", err)
+	}
+	if len(users) != 2 {
+		t.Fatalf("failed to find records %d", len(users))
+	}
+	if users[0].Name != "Tom" || users[0].Age != 18 || users[0].ID != 1 {
+		t.Fatalf("failed to find records %v", users[0])
+	}
+	if users[1].Name != "Sam" || users[1].Age != 25 || users[1].ID != 2 {
+		t.Fatalf("failed to find records %v", users[1])
+	}
+
 }
