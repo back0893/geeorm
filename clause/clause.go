@@ -12,6 +12,9 @@ const (
 	OFFSET
 	ORDERBY
 	WHERE
+	UPDATE
+	DELETE
+	COUNT
 )
 
 type Clause struct {

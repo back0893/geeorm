@@ -130,6 +130,9 @@ func (s *Session) Insert(values ...any) (int64, error) {
 	for _, value := range values {
 		table := s.Model(value).RefTable()
 		s.clause.Set(clause.INSERT, table.Name, table.FieldNames)
+		CallHookMethod(value, func(method IBeforeInsert) {
+			method.BeforeInsert(s)
+		})
 		vars = append(vars, s.refTable.RecordValues(value))
 	}
 	s.clause.Set(clause.VALUES, vars...)
@@ -138,10 +141,19 @@ func (s *Session) Insert(values ...any) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	for _, value := range values {
+		CallHookMethod(value, func(method IAfterInsert) {
+			method.AfterInsert(s)
+		})
+	}
+
 	return result.RowsAffected()
 }
 
 func (s *Session) Find(value any) error {
+	CallHookMethod(s.refTable.Model, func(method IBeforeQuery) {
+		method.BeforeQuery(s)
+	})
 	//select $fileds from $tableName
 	descSlice := reflect.ValueOf(value)
 	if descSlice.Kind() != reflect.Ptr {
@@ -160,7 +172,7 @@ func (s *Session) Find(value any) error {
 
 	s.clause.Set(clause.SELECT, schema.Name, schema.FieldNames)
 
-	sql, vars := s.clause.Build(clause.SELECT)
+	sql, vars := s.clause.Build(clause.SELECT, clause.WHERE, clause.ORDERBY, clause.LIMIT)
 	rows, err := s.Raw(sql, vars...).QueryRows()
 	if err != nil {
 		return err
@@ -176,9 +188,32 @@ func (s *Session) Find(value any) error {
 		}
 		if srcdescType.Kind() == reflect.Ptr {
 			descSlice.Set(reflect.Append(descSlice, record.Addr()))
+			CallHookMethod(record.Addr().Interface(), func(method IAfterQuery) {
+				method.AfterQuery(s)
+			})
 		} else {
 			descSlice.Set(reflect.Append(descSlice, record))
+			CallHookMethod(record.Interface(), func(method IAfterQuery) {
+				method.AfterQuery(s)
+			})
 		}
+
 	}
 	return rows.Close()
+}
+func (s *Session) First(value any) error {
+	dst := reflect.ValueOf(value)
+	if dst.Kind() != reflect.Ptr {
+		return errors.New("not pointer")
+	}
+	descSlice := reflect.New(reflect.SliceOf(dst.Type())).Elem()
+	if err := s.Limit(1).Find(descSlice.Addr().Interface()); err != nil {
+		return err
+	}
+	if descSlice.Len() == 0 {
+		return errors.New("no result")
+	}
+	dst.CanSet()
+	dst.Elem().Set(descSlice.Index(0).Elem())
+	return nil
 }

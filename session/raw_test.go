@@ -3,6 +3,7 @@ package session
 import (
 	"database/sql"
 	"geemod/dialect"
+	"log"
 	"os"
 	"testing"
 
@@ -57,6 +58,25 @@ type User struct {
 	ID   int `geeorm:"Primary Key"`
 	Name string
 	Age  int
+}
+
+func (u *User) BeforeInsert(s *Session) {
+	log.Printf("insert id:%d name:%s,age:%d", u.ID, u.Name, u.Age)
+}
+func (u *User) AfterInsert(s *Session) {
+	log.Printf("after insert id:%d", u.ID)
+}
+func (u *User) BeforeQuery(s *Session) {
+	log.Printf("before query id:%d", u.ID)
+}
+func (u *User) AfterQuery(s *Session) {
+	log.Printf("after query id:%d", u.ID)
+}
+func (u *User) BeforeDelete(s *Session) {
+	log.Printf("before delete id:%d", u.ID)
+}
+func (u *User) AfterDelete(s *Session) {
+	log.Printf("after delete id:%d", u.ID)
 }
 
 func TestSessionCreate(t *testing.T) {
@@ -122,4 +142,53 @@ func TestFind(t *testing.T) {
 		t.Fatalf("failed to find records %v", users[1])
 	}
 
+}
+
+func TestFirst(t *testing.T) {
+	s := testRecordInit(t)
+	var user User
+	if err := s.First(&user); err != nil {
+		t.Fatalf("failed to find records %v", err)
+	}
+	if user.Name != "Tom" || user.Age != 18 || user.ID != 1 {
+		t.Fatalf("failed to find records %v", user)
+	}
+}
+
+func TestOrderBy(t *testing.T) {
+	s := testRecordInit(t)
+	var users []*User
+	if err := s.OrderBy("ID", true).Limit(2).Find(&users); err != nil {
+		t.Fatalf("failed to find records %v", err)
+	}
+	if len(users) != 2 {
+		t.Fatalf("failed to find records %d", len(users))
+	}
+	if users[0].Name != "Sam" || users[0].Age != 25 || users[0].ID != 2 {
+		t.Fatalf("failed to find records %v", users[0])
+	}
+	if users[1].Name != "Tom" || users[1].Age != 18 || users[1].ID != 1 {
+		t.Fatalf("failed to find records %v", users[1])
+	}
+
+}
+func TestCount(t *testing.T) {
+	s := testRecordInit(t)
+	count, err := s.Model(&User{}).Where("ID=?", 1).Count("*")
+	if err != nil {
+		t.Fatalf("failed to find records %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("failed to find records %d", count)
+	}
+}
+func TestDelete(t *testing.T) {
+	s := testRecordInit(t)
+	count, err := s.Model(&User{}).Where("ID=?", 1).Delete()
+	if err != nil {
+		t.Fatalf("failed to find records %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("failed to find records %d", count)
+	}
 }

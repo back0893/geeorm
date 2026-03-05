@@ -18,6 +18,9 @@ func init() {
 	generators[OFFSET] = _offset
 	generators[ORDERBY] = _orderby
 	generators[WHERE] = _where
+	generators[UPDATE] = _update
+	generators[DELETE] = _delete
+	generators[COUNT] = _count
 }
 
 func _insert(values ...any) (string, []any) {
@@ -74,4 +77,28 @@ func _orderby(values ...any) (string, []any) {
 func _where(values ...any) (string, []any) {
 	//where $cond
 	return fmt.Sprintf("where %s", values[0]), values[1:]
+}
+
+func _update(values ...any) (string, []any) {
+	//update $table_name set $col1=$val1,$col2=$val2 ...
+	tableName := values[0].(string)
+	var sqlBuiler strings.Builder
+	sqlBuiler.WriteString(fmt.Sprintf("update %s set ", tableName))
+	var vars []any
+	updates := make([]string, 0)
+	for key, val := range values[1].(map[string]any) {
+		updates = append(updates, fmt.Sprintf("%s=?", key))
+		vars = append(vars, val)
+	}
+	sqlBuiler.WriteString(strings.Join(updates, ","))
+	return sqlBuiler.String(), vars
+}
+
+func _delete(values ...any) (string, []any) {
+	//deleet $tableName
+	return fmt.Sprintf("delete from %s", values[0].(string)), nil
+}
+func _count(values ...any) (string, []any) {
+	//select count($field) from $table_name
+	return _select(values[0].(string), []string{fmt.Sprintf("count(%s)", values[1].(string))})
 }
