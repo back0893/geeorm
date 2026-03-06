@@ -32,3 +32,24 @@ func (e *Engine) Close() error {
 func (e *Engine) Session() *session.Session {
 	return session.New(e.db, e.dialect)
 }
+
+type TxFunc func(*session.Session) error
+
+func (e *Engine) Transaction(fn TxFunc) error {
+	s := e.Session()
+	if err := s.Begin(); err != nil {
+		return err
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			s.Rollback()
+		}
+	}()
+	err := fn(s)
+	if err != nil {
+		s.Rollback()
+		return err
+	}
+	s.Commit()
+	return nil
+}

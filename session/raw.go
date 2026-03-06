@@ -21,6 +21,8 @@ type Session struct {
 	refTable *schema.Schema
 
 	clause clause.Clause
+
+	tx *sql.Tx
 }
 
 func New(db *sql.DB, dialect dialect.Dialect) *Session {
@@ -46,7 +48,7 @@ func (s *Session) Raw(sql string, values ...any) *Session {
 func (s *Session) Exec() (sql.Result, error) {
 	defer s.Clear()
 	log.Infof("sql:%s", s.builder.String())
-	result, err := s.db.Exec(s.builder.String(), s.sqlValues...)
+	result, err := s.DB().Exec(s.builder.String(), s.sqlValues...)
 	if err != nil {
 		log.Errorf("exec failed, err:%v", err)
 		return nil, err
@@ -57,7 +59,7 @@ func (s *Session) Exec() (sql.Result, error) {
 func (s *Session) QueryRow() (*sql.Row, error) {
 	defer s.Clear()
 	log.Infof("sql:%s", s.builder.String())
-	row := s.db.QueryRow(s.builder.String(), s.sqlValues...)
+	row := s.DB().QueryRow(s.builder.String(), s.sqlValues...)
 	if row.Err() != nil {
 		log.Errorf("query failed, err:%v", row.Err())
 		return nil, row.Err()
@@ -68,7 +70,7 @@ func (s *Session) QueryRow() (*sql.Row, error) {
 func (s *Session) QueryRows() (*sql.Rows, error) {
 	defer s.Clear()
 	log.Infof("sql:%s", s.builder.String())
-	rows, err := s.db.Query(s.builder.String(), s.sqlValues...)
+	rows, err := s.DB().Query(s.builder.String(), s.sqlValues...)
 	if err != nil {
 		log.Errorf("query failed, err:%v", err)
 		return nil, err
@@ -216,4 +218,20 @@ func (s *Session) First(value any) error {
 	dst.CanSet()
 	dst.Elem().Set(descSlice.Index(0).Elem())
 	return nil
+}
+
+type CommonDB interface {
+	Query(sql string, vars ...any) (*sql.Rows, error)
+	QueryRow(sql string, vars ...any) *sql.Row
+	Exec(sql string, vars ...any) (sql.Result, error)
+}
+
+var _ CommonDB = (*sql.DB)(nil)
+var _ CommonDB = (*sql.Tx)(nil)
+
+func (s *Session) DB() CommonDB {
+	if s.tx != nil {
+		return s.tx
+	}
+	return s.db
 }
