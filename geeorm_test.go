@@ -3,6 +3,7 @@ package geeorm
 import (
 	"errors"
 	"geemod/session"
+	"reflect"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -51,5 +52,21 @@ func transactionRollback(t *testing.T) {
 	hasTable, _ := s.HasTable()
 	if err == nil || hasTable {
 		t.Fatal("failed to rollback")
+	}
+}
+
+func TestEngine_Migrate(t *testing.T) {
+	engine := OpenDb(t)
+	defer engine.Close()
+	s := engine.Session()
+	_, _ = s.Raw("DROP TABLE IF EXISTS User;").Exec()
+	_, _ = s.Raw("CREATE TABLE User(Name text PRIMARY KEY, XXX integer);").Exec()
+	_, _ = s.Raw("INSERT INTO User(`Name`) values (?), (?)", "Tom", "Sam").Exec()
+	engine.Migrate(&User{})
+
+	rows, _ := s.Raw("SELECT * FROM User").QueryRows()
+	columns, _ := rows.Columns()
+	if !reflect.DeepEqual(columns, []string{"Name", "Age"}) {
+		t.Fatal("Failed to migrate table User, got columns", columns)
 	}
 }
